@@ -1,81 +1,40 @@
 package dev.andytang.demo.aspect;
 
-import org.apache.commons.lang3.reflect.FieldUtils;
-import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 
+import java.net.InetSocketAddress;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Aspect
 public class KafkaAdminClientAspect {
 
-//    @Before("execution(* org.apache.kafka.clients.admin.internals.AdminMetadataManager.update(..)) && args(cluster,..)")
-//    public void before(ProceedingJoinPoint joinPoint, Cluster cluster) throws IllegalAccessException {
-//        List<Node> oldNodes = ((AdminMetadataManager) joinPoint.getTarget()).updater()
-//                                                                            .fetchNodes();
-//        if (!oldNodes.isEmpty() && oldNodes.get(0).id() == -1) {
-//            FieldUtils.writeField(cluster, "nodes", cluster.nodes()
-//                                                           .stream()
-//                                                           .map(node -> new Node(node.id(), oldNodes.get(0).host(), node.port(), node.rack()))
-//                                                           .collect(Collectors.toList()), true);
-//        }
-//    }
-//
-//    @After("execution(* org.apache.kafka.clients.admin.internals.AdminMetadataManager.update(..))")
-//    public void after() {
-//        System.out.println("after update");
-//    }
-//
-//    @AfterReturning(pointcut = "pointcut()", returning = "returnObject")
-//    public void afterReturning(JoinPoint joinPoint, Object returnObject) {
-//        System.out.println("afterReturning");
-//    }
-//
-//    @AfterThrowing("pointcut()")
-//    public void afterThrowing() {
-//        System.out.println("afterThrowing afterThrowing  rollback");
-//    }
+    private Map<String, Integer> bootstrapServers = new ConcurrentHashMap<>();
 
-    @Around("execution(* org.apache.kafka.clients.admin.internals.AdminMetadataManager.update(..)) && args(cluster,..)")
-    public Object aroundAdminMetadataManagerUpdate(ProceedingJoinPoint joinPoint, Cluster cluster) throws Throwable {
+    @Around("execution(* org.apache.kafka.clients.Metadata.bootstrap(..)) && args(addresses)")
+    public void aroundMetadataBootstrap(ProceedingJoinPoint joinPoint, List<InetSocketAddress> addresses) throws Throwable {
         try {
-            List<Node> oldNodes = ((AdminMetadataManager) joinPoint.getTarget()).updater().fetchNodes();
-            if (!oldNodes.isEmpty() && oldNodes.get(0).id() == -1) {
-                FieldUtils.writeField(cluster,
-                        "nodes",
-                        cluster.nodes()
-                               .stream()
-                               .map(node -> {
-                                   return new Node(node.id(), oldNodes.get(0).host(), node.port(), node.rack());
-                               })
-                               .collect(Collectors.toList()),
-                        true);
-            }
-            return joinPoint.proceed();
+            addresses.stream().forEach(address -> bootstrapServers.putIfAbsent(address.getHostString(), address.getPort()));
+            joinPoint.proceed();
         } catch (Throwable e) {
             e.printStackTrace();
             throw e;
         }
     }
 
-    @Around("execution(* org.apache.kafka.clients.Metadata.update(..)) && args(requestVersion, response,..)")
-    public Object around(ProceedingJoinPoint joinPoint, int requestVersion, MetadataResponse response) throws Throwable {
+    @Around("within(org.apache.kafka.clients.MetadataUpdater+) && execution(* handleSuccessfulResponse(..)) && args(requestHeader,now,metadataResponse)")
+    public void aroundMetadataUpdaterHandleSuccessfulResponse(ProceedingJoinPoint joinPoint, RequestHeader requestHeader, long now, MetadataResponse metadataResponse) throws Throwable {
+        System.out.println("12345");
         try {
-            System.out.println("around 1");
-            List<Node> oldNodes = ((Metadata) joinPoint.getTarget()).fetch().nodes();
-            if (!oldNodes.isEmpty() && oldNodes.get(0).id() == -1) {
-                MetadataResponseData.MetadataResponseBrokerCollection brokers = new MetadataResponseData.MetadataResponseBrokerCollection(response.data().brokers().size());
-                response.data().brokers().stream().forEach(broker -> broker.setHost(oldNodes.get(0).host()));
-            }
-            return joinPoint.proceed();
+            metadataResponse.data().brokers().stream().forEach(broker -> broker.setHost("192.168.0.203"));
+            Object[] args = joinPoint.getArgs();
+            args[2] = new MetadataResponse(metadataResponse.data(), (short) (metadataResponse.hasReliableLeaderEpochs() ? 9 : 0));
+            joinPoint.proceed(args);
         } catch (Throwable e) {
             e.printStackTrace();
             throw e;
