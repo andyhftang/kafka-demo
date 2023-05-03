@@ -2,8 +2,8 @@ package dev.andytang.demo.aspect;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.RequestHeader;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -46,11 +46,17 @@ public class KafkaAdminClientAspect {
         try {
             AbstractResponse response = (AbstractResponse) joinPoint.proceed();
             if (response instanceof MetadataResponse) {
-                ((MetadataResponse) response).data().brokers().stream().forEach(broker -> {
+                ((MetadataResponse) response).data().brokers().forEach(broker -> {
                     broker.setHost("192.168.0.203");
                     broker.setPort(bootstrapServers.get("192.168.0.203"));
                 });
+            } else if (response instanceof FindCoordinatorResponse) {
+                ((FindCoordinatorResponse) response).data().coordinators().forEach(coordinator -> {
+                    coordinator.setHost("192.168.0.203");
+                    coordinator.setPort(bootstrapServers.get("192.168.0.203"));
+                });
             }
+
             return response;
 
         } catch (Throwable e) {

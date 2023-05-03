@@ -54,11 +54,11 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka-test</artifactId>
-            <scope>test</scope>
-        </dependency>
+        <!--        <dependency>-->
+        <!--            <groupId>org.springframework.kafka</groupId>-->
+        <!--            <artifactId>spring-kafka-test</artifactId>-->
+        <!--            <scope>test</scope>-->
+        <!--        </dependency>-->
     </dependencies>
 
     <build>
@@ -82,6 +82,9 @@
                     <complianceLevel>11</complianceLevel>
                     <showWeaveInfo>true</showWeaveInfo>
                     <Xlint>ignore</Xlint>
+                    <includes>
+                        <include>**/KafkaAdminClientAspect.java</include>
+                    </includes>
                     <weaveDependencies>
                         <weaveDependency>
                             <groupId>org.apache.kafka</groupId>
